@@ -51,15 +51,8 @@ func runAPScript(_ s: APScripts) -> [String]? {
 }
 
 func getActiveFilename() -> String? {
-    let activeApplicationVersion = """
-        tell application (path to frontmost application as Unicode text)
-            if name is "Xcode" then
-                get version
-            end if
-        end tell
-    """
-    let result = NSAppleScript(source: activeApplicationVersion)?.executeAndReturnError(nil)
-    let version = result?.stringValue?.split(separator: ".")
+    let result = getXcodeVersion()
+    let version = result?.split(separator: ".")
 //    print(version?[0], version?[1])
     
     guard let fileNames = runAPScript(.documentNames) else {
@@ -124,7 +117,20 @@ func getActiveWindow() -> String? {
             arr.append(strVal)
         }
 //        print(arr[0])
-        return arr[0]
+        if xcodeWindowNames.contains(arr[0]) {
+            return arr[0]
+        }
     }
-    return ""
+    return "Xcode"
+}
+
+func getXcodeVersion() -> String? {
+    let activeApplicationVersion = """
+        tell application "Xcode"
+            get version
+        end tell
+    """
+    let result = NSAppleScript(source: activeApplicationVersion)?.executeAndReturnError(nil)
+    
+    return result?.stringValue
 }

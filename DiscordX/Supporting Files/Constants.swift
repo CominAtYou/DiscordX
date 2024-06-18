@@ -77,6 +77,32 @@ let discordRPImageKeys = [
     "entitlements",
 ]
 
+let fileTypeActivityDescriptions = [
+    "swift": "a Swift file",
+    "playground": "a playground",
+    "storyboard": "a storyboard",
+    "xcodeproj": "a project file",
+    "h": "a header file",
+    "m": "an Objective-C file",
+    "cpp": "a C++ file",
+    "c": "a C file",
+    "sdef": "an AppleScript definition file",
+    "plist": "a property list",
+    "md": "a markdown file",
+    "appex": "an app extension",
+    "rcproject": "a Reality Composer scene",
+    "rtf": "a rich text file",
+    "rtfd": "a rich text directory",
+    "pch": "a header file",
+    "mm": "an Objective-C++ file",
+    "xcassets": "project assets",
+    "iig": "an IOKit Interface Generator",
+    "metal": "a Metal shader",
+    "xib": "an interface builder file",
+    "arobject": "an AR object",
+    "entitlements": "an entitlements file"
+]
+
 // default for unsupported file types
 let discordRPImageKeyDefault = "xcode"
 

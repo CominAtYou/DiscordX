@@ -30,7 +30,6 @@ enum RefreshConfigurable: Int {
 
 //@NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
-
     var window: NSWindow!
     var timer: Timer?
     var rpc: SwordRPC?
@@ -40,6 +39,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var notifCenter = NSWorkspace.shared.notificationCenter
     
     var statusItem: NSStatusItem!
+    
+    var startStopButton: NSMenuItem!
+    
+    var strictMenuItem: NSMenuItem!
+    var flauntMenuItem: NSMenuItem!
     
     var isRelaunch: Bool = false
     
@@ -54,6 +58,49 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func clearTimer() {
         timer?.invalidate()
+    }
+    
+    @objc
+    func startListening() {
+        if rpc == nil {
+            isRelaunch = true
+            launchApplication()
+            
+            startStopButton.title = "Stop DiscordX"
+            startStopButton.action = #selector(stopListening)
+        } else {
+            print("DiscordX is already running")
+        }
+    }
+    
+    @objc
+    func stopListening() {
+        if let rpc {
+            rpc.setPresence(RichPresence())
+            rpc.disconnect()
+            self.rpc = nil
+            clearTimer()
+            
+            startStopButton.title = "Start DiscordX"
+            startStopButton.action = #selector(startListening)
+        } else {
+            print("DiscordX is not running")
+        }
+    }
+    
+    @objc func handleMenuSelectionChange(_ sender: NSMenuItem) {
+        if sender == strictMenuItem {
+            strictMode = true
+            strictMenuItem.state = .on
+            flauntMode = false
+            flauntMenuItem.state = .off
+        }
+        else {
+            strictMode = false
+            strictMenuItem.state = .off
+            flauntMode = true
+            flauntMenuItem.state = .on
+        }
     }
 
     func updateStatus() {
@@ -71,9 +118,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             p.details = "Editing \(fn!)"
             if let fileExt = getFileExt(fn!), discordRPImageKeys.contains(fileExt) {
                 p.assets.largeImage = fileExt
+                p.assets.largeText = "Editing \(fileTypeActivityDescriptions[fileExt]!)"
                 p.assets.smallImage = discordRPImageKeyXcode
             } else {
                 p.assets.largeImage = discordRPImageKeyDefault
+            }
+            
+            if let version = getXcodeVersion() {
+                p.assets.smallText = "Xcode \(version)"
+            }
+            else {
+                p.assets.smallText = "Xcode"
             }
         } else {
             if let appName = an, xcodeWindowNames.contains(appName) {
@@ -87,13 +142,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if ws != nil {
             if an == "Xcode"{
                 if ws != "Untitled" {
-                    p.state = "in \(withoutFileExt(ws!))"
+                    p.state = withoutFileExt(ws!)
                     lastWindow = ws!
                 }
             } else {
                 p.assets.smallImage = discordRPImageKeyXcode
                 p.assets.largeImage = discordRPImageKeyDefault
-                p.state = "Working on \(withoutFileExt((lastWindow ?? ws) ?? "?" ))"
+                p.state = withoutFileExt((lastWindow ?? ws) ?? "?")
             }
         }
 
@@ -113,7 +168,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // init discord stuff
         rpc = SwordRPC.init(appId: discordClientId)
         rpc!.delegate = self
-        rpc!.connect()
+        _ = rpc!.connect()
     }
 
     func deinitRPC() {
@@ -122,96 +177,43 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.rpc = nil
     }
     
-    struct ContentView: View {
-        @State var refreshConfigurable: RefreshConfigurable
-        var appDelegate: AppDelegate
-        
-        init(_ appDelegate: AppDelegate) {
-            self.appDelegate = appDelegate
-            if strictMode {
-                refreshConfigurable = .strict
-            } else if flauntMode {
-                refreshConfigurable = .flaunt
-            } else {
-                fatalError("Unspecified refresh type")
-            }
-        }
-        
-        var body: some View {
-            VStack {
-                VStack {
-                    Spacer()
-                    Button("Start DiscordX") {
-                        if self.appDelegate.rpc == nil {
-                            self.appDelegate.isRelaunch = true
-                            self.appDelegate.launchApplication()
-                        } else {
-                            print("DiscordX is already running")
-                        }
-                    }
-                    Spacer()
-                    Button("Stop DiscordX") {
-                        if let rpc = self.appDelegate.rpc {
-                            rpc.setPresence(RichPresence())
-                            rpc.disconnect()
-                            self.appDelegate.rpc = nil
-                            self.appDelegate.clearTimer()
-                        } else {
-                            print("DiscordX is not running")
-                        }
-                    }
-                    
-                    Spacer()
-                    Picker(selection: $refreshConfigurable, label: Text("Select Mode :")) {
-                        Text("Strict").tag(RefreshConfigurable.strict)
-                            .help(RefreshConfigurable.strict.message)
-                        Text("Flaunt").tag(RefreshConfigurable.flaunt)
-                            .help(RefreshConfigurable.flaunt.message)
-                    }
-                    .pickerStyle(RadioGroupPickerStyle())
-                    
-                    Spacer()
-                    Button("Quit DiscordX") {
-                        exit(-1)
-                    }
-                    .padding(.top)
-                    .foregroundColor(.red)
-                    Spacer()
-                }
-            }
-            .onChange(of: refreshConfigurable) { newValue in
-                switch newValue {
-                case .strict:
-                    strictMode = true
-                    flauntMode = false
-                case .flaunt:
-                    strictMode = false
-                    flauntMode = true
-                }
-            }
-        }
-    }
     
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         launchApplication()
-        
-        let contentView = ContentView(self)
-        let view = NSHostingView(rootView: contentView)
-        print(strictMode, flauntMode)
-        
-        view.frame = NSRect(x: 0, y: 0, width: 200, height: 160)
-                
-        let menuItem = NSMenuItem()
-        menuItem.view = view
                 
         let menu = NSMenu()
-        menu.addItem(menuItem)
+        
+        startStopButton = NSMenuItem(title: "Stop DiscordX", action: #selector(stopListening), keyEquivalent: "")
+        menu.addItem(startStopButton)
+        
+        let modeMenu = NSMenu(title: "Mode")
+        strictMenuItem = NSMenuItem(title: "Strict", action: #selector(handleMenuSelectionChange), keyEquivalent: "")
+        strictMenuItem.target = self
+        strictMenuItem.state = strictMode ? .on : .off
+        modeMenu.addItem(strictMenuItem)
+        
+        flauntMenuItem = NSMenuItem(title: "Flaunt", action: #selector(handleMenuSelectionChange), keyEquivalent: "")
+        flauntMenuItem.target = self
+        flauntMenuItem.state = flauntMode ? .on : .off
+        modeMenu.addItem(flauntMenuItem)
+        
+        let modeMenuItem = NSMenuItem(title: "Mode", action: nil, keyEquivalent: "")
+        menu.setSubmenu(modeMenu, for: modeMenuItem)
+        
+        menu.addItem(modeMenuItem)
+        
+        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate), keyEquivalent: ""))
+        
                 
         // StatusItem is stored as a class property.
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem?.menu = menu
-        let image = NSImage(named: "AppIcon")
-        image?.size = NSMakeSize(24.0, 24.0)
+        let image = NSImage(systemSymbolName: "hammer.fill", accessibilityDescription: nil)!
+            .withSymbolConfiguration(
+                NSImage.SymbolConfiguration(textStyle: .body, scale: .medium).applying(.init(pointSize: 12, weight: .semibold))
+            )!
+        
+        image.size = NSMakeSize(24.0, 24.0)
         statusItem.button!.image = image
         statusItem.isVisible = true
         
@@ -267,17 +269,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             })
             
-            self.notifCenter.addObserver(forName: NSWorkspace.didDeactivateApplicationNotification, object: nil, queue: nil, using: { notif in
-                if let app = notif.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
-                    if app.bundleIdentifier == xcodeBundleId {
-                        //Xcode is inactive (Not frontmost)
-                        self.inactiveDate = Date()
-                        if self.rpc != nil {
-                            self.updateStatus()
-                        }
-                    }
-                }
-            })
+//            self.notifCenter.addObserver(forName: NSWorkspace.didDeactivateApplicationNotification, object: nil, queue: nil, using: { notif in
+//                if let app = notif.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
+//                    if app.bundleIdentifier == xcodeBundleId {
+//                        //Xcode is inactive (Not frontmost)
+//                        self.inactiveDate = Date()
+//                        if self.rpc != nil {
+//                            self.updateStatus()
+//                        }
+//                    }
+//                }
+//            })
         }
         
         if !flauntMode {
